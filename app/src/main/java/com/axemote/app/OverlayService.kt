@@ -31,10 +31,10 @@ class OverlayService : Service() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         createChannel()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(7001, notification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(7001, notification())
-        }
+    startForeground(7001, notification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+} else {
+    startForeground(7001, notification())
+}
         showFloatingIcon()
     }
 
