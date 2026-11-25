@@ -3,49 +3,47 @@ name: Android APK Build
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    env:
+      AX_KEYSTORE_BASE64: ${{ secrets.AX_KEYSTORE_BASE64 }}
+      AX_STORE_PASSWORD: ${{ secrets.AX_STORE_PASSWORD }}
+      AX_KEY_ALIAS: ${{ secrets.AX_KEY_ALIAS }}
+      AX_KEY_PASSWORD: ${{ secrets.AX_KEY_PASSWORD }}
     steps:
-      # রিপোজিটরির কোড ডাউনলোড করা
       - uses: actions/checkout@v4
 
-      # Java 17 সেটআপ (v5 এ আপডেট করা হয়েছে)
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
 
-      # Android SDK পরিবেশ প্রস্তুত করা
       - uses: android-actions/setup-android@v3
 
-      # Gradle ক্যাশ ও সেটআপ
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.9
+          gradle-version: '8.9'
 
-      # প্রয়োজনীয় Android SDK প্ল্যাটফর্ম ও Build-Tools ইনস্টল করা
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
+          yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      # Debug APK বিল্ড করা (gradlew থাকলে সেটি ব্যবহার করুন, নইলে gradle)
       - name: Build debug APK
-        run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew assembleDebug --stacktrace
-          else
-            gradle assembleDebug --stacktrace
-          fi
+        run: gradle assembleDebug --stacktrace
 
-      # তৈরি হওয়া APK ফাইল Artifacts হিসেবে আপলোড করা
+      - name: Build signed release APK (only if signing secrets exist)
+        if: ${{ env.AX_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "$AX_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/ax-release.jks"
+          export AX_KEYSTORE_PATH="$RUNNER_TEMP/ax-release.jks"
+          gradle assembleRelease --stacktrace
+
       - uses: actions/upload-artifact@v4
         with:
           name: ax-emote-server-apks
           path: app/build/outputs/apk/**/*.apk
-          if-no-files-found: ignore
+          if-no-files-found: error
