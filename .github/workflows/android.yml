@@ -32,7 +32,7 @@ jobs:
           "$SDKM" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+        run: gradle assembleDebug
 
       - name: Build signed release APK (only if signing secrets exist)
         if: ${{ env.AX_KEYSTORE_BASE64 != '' }}
