@@ -1,6 +1,0 @@
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="#050823" />
-    <item>
-        <bitmap android:src="@drawable/ax_official_logo" android:gravity="center" />
-    </item>
-</layer-list>
