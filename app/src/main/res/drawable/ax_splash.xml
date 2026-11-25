@@ -1,6 +1,12 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="#050823" />
     <item>
-        <bitmap android:src="@drawable/ax_official_logo" android:gravity="center" />
+        <shape android:shape="rectangle">
+            <solid android:color="#050823" />
+        </shape>
+    </item>
+    <item>
+        <bitmap
+            android:src="@drawable/ax_official_logo"
+            android:gravity="center" />
     </item>
 </layer-list>
