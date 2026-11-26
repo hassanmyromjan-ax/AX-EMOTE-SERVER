@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.view.View
 
@@ -14,6 +15,7 @@ class IconView(context: Context, private val kind: Int) : View(context) {
         const val CLOSE = 0
         const val MOVE = 1
         const val GRIP = 2
+        const val TARGET = 3
     }
 
     private val d = resources.displayMetrics.density
@@ -24,6 +26,10 @@ class IconView(context: Context, private val kind: Int) : View(context) {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val rect = RectF()
     private val accent = Color.rgb(255, 92, 225)
+
+    /** TARGET only: true while the dragged icon hovers over it. */
+    var active: Boolean = false
+        set(v) { field = v; invalidate() }
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
@@ -54,6 +60,19 @@ class IconView(context: Context, private val kind: Int) : View(context) {
                 arrow(canvas, cx - r, cy, -1f, 0f)
                 arrow(canvas, cx + r, cy, 1f, 0f)
             }
+            TARGET -> {
+                val red = Color.rgb(229, 23, 63)
+                fill.color = if (active) red else Color.rgb(30, 32, 34)
+                canvas.drawCircle(cx, cy, 29f * d, fill)
+                line.color = red
+                line.strokeWidth = 2f * d
+                canvas.drawCircle(cx, cy, 29f * d, line)
+                line.color = Color.WHITE
+                line.strokeWidth = 2.4f * d
+                val a = 9f * d
+                canvas.drawLine(cx - a, cy - a, cx + a, cy + a, line)
+                canvas.drawLine(cx - a, cy + a, cx + a, cy - a, line)
+            }
             GRIP -> {
                 line.color = accent
                 line.strokeWidth = 2f * d
@@ -73,5 +92,31 @@ class IconView(context: Context, private val kind: Int) : View(context) {
         val by = y - uy * a
         c.drawLine(x, y, bx - uy * a, by + ux * a, line)
         c.drawLine(x, y, bx + uy * a, by - ux * a, line)
+    }
+}
+
+/** Loading bar that fills from the left to the right (value 0..100). */
+class DualProgressBar(context: Context) : View(context) {
+    var value: Float = 0f
+        set(v) { field = v; invalidate() }
+
+    private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(34, 36, 38) }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 230, 118) }
+    private val rect = RectF()
+    private val clip = Path()
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        rect.set(0f, 0f, w, h)
+        canvas.drawRoundRect(rect, h / 2f, h / 2f, trackPaint)
+        val fillW = w * (value / 100f).coerceIn(0f, 1f)
+        if (fillW <= 0f) return
+        clip.reset()
+        clip.addRoundRect(rect, h / 2f, h / 2f, Path.Direction.CW)
+        canvas.save()
+        canvas.clipPath(clip)
+        canvas.drawRect(0f, 0f, fillW, h, fillPaint)
+        canvas.restore()
     }
 }
