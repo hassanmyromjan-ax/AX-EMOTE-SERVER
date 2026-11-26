@@ -2,10 +2,13 @@ package com.axemote.app
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.ColorFilter
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.graphics.RectF
 import android.graphics.Shader
 import android.view.View
@@ -128,4 +131,58 @@ class DualProgressBar(context: Context) : View(context) {
         canvas.drawRect(0f, 0f, fillW, h, fillPaint)
         canvas.restore()
     }
+}
+
+/** Icon for the OVERLAY ON/OFF button: ON = lightning bolt, OFF = power symbol (round dark badge). */
+class ToggleIconDrawable(
+    private val on: Boolean,
+    private val iconColor: Int,
+    private val badgeColor: Int,
+    private val sizePx: Int
+) : Drawable() {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
+    }
+    private val path = Path()
+    private val rect = RectF()
+
+    override fun getIntrinsicWidth() = sizePx
+    override fun getIntrinsicHeight() = sizePx
+
+    override fun draw(canvas: Canvas) {
+        val b = bounds
+        val w = b.width().toFloat()
+        val cx = b.exactCenterX()
+        val cy = b.exactCenterY()
+        fill.color = badgeColor
+        canvas.drawCircle(cx, cy, w / 2f, fill)
+        val left = cx - w / 2f
+        val top = cy - w / 2f
+        if (on) {
+            path.reset()
+            path.moveTo(left + w * 0.57f, top + w * 0.16f)
+            path.lineTo(left + w * 0.28f, top + w * 0.55f)
+            path.lineTo(left + w * 0.47f, top + w * 0.55f)
+            path.lineTo(left + w * 0.41f, top + w * 0.84f)
+            path.lineTo(left + w * 0.72f, top + w * 0.43f)
+            path.lineTo(left + w * 0.52f, top + w * 0.43f)
+            path.close()
+            fill.color = iconColor
+            canvas.drawPath(path, fill)
+        } else {
+            line.color = iconColor
+            line.strokeWidth = w * 0.09f
+            val r = w * 0.24f
+            rect.set(cx - r, cy - r + w * 0.03f, cx + r, cy + r + w * 0.03f)
+            canvas.drawArc(rect, -50f, 280f, false, line)
+            canvas.drawLine(cx, cy - w * 0.27f, cx, cy - w * 0.03f, line)
+        }
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
