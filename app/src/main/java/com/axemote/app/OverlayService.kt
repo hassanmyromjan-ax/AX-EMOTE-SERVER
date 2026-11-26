@@ -310,7 +310,7 @@ class OverlayService : Service() {
         // website area (always fits inside the card, nothing is cut)
         val holder = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         column.addView(holder, LinearLayout.LayoutParams(-1, 0, 1f))
-        val web = WebViewStore.webView
+        val web = WebViewStore.container
         if (web != null) {
             WebViewStore.detach(web)
             holder.addView(web, FrameLayout.LayoutParams(-1, -1))
@@ -343,7 +343,7 @@ class OverlayService : Service() {
             wm.addView(card, params)
             WebViewStore.notifyOverlayChanged()
         } catch (_: Exception) {
-            WebViewStore.webView?.let { WebViewStore.detach(it) }
+            WebViewStore.container?.let { WebViewStore.detach(it) }
             overlayRoot = null; pageParams = null; WebViewStore.overlayShowing = false
             WebViewStore.notifyOverlayChanged()
             showFloatingIcon()
@@ -410,7 +410,7 @@ class OverlayService : Service() {
     private fun closeOverlayPage() {
         val root = overlayRoot ?: return
         rememberBounds()
-        val web = WebViewStore.webView
+        val web = WebViewStore.container
         if (web != null) WebViewStore.detach(web)
         try { wm.removeView(root) } catch (_: Exception) { }
         overlayRoot = null; pageParams = null; WebViewStore.overlayShowing = false
@@ -462,7 +462,7 @@ class OverlayService : Service() {
 
     private fun closeOverlayPageIfNeeded() {
         overlayRoot?.let { root ->
-            WebViewStore.webView?.let { WebViewStore.detach(it) }
+            WebViewStore.container?.let { WebViewStore.detach(it) }
             try { wm.removeView(root) } catch (_: Exception) { }
         }
         overlayRoot = null; pageParams = null; WebViewStore.overlayShowing = false
