@@ -22,7 +22,7 @@ import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
-import android.widget.AbsoluteLayout
+import android.widget.FrameLayout
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -42,6 +42,9 @@ object WebViewStore {
     private const val REFRESH_SCHEME = "axrefresh"
 
     var webView: WebView? = null
+
+    /** What the hosts (main screen / overlay card) actually attach: WebView + Loading cover. */
+    var container: FrameLayout? = null
 
     var overlayShowing: Boolean = false
 
@@ -80,6 +83,10 @@ object WebViewStore {
         app = application
         val web = WebView(application)
         webView = web
+        container = FrameLayout(application).apply {
+            setBackgroundColor(Color.BLACK)
+            addView(web, FrameLayout.LayoutParams(-1, -1))
+        }
         configure(web, application)
         watchNetwork(application)
         loadSite()
@@ -141,16 +148,14 @@ object WebViewStore {
      * Native "Loading..." cover drawn ON TOP of the WebView. It stays until the website
      * has really finished loading, so the half-loaded page is never visible.
      */
-    @Suppress("DEPRECATION")
     private fun showLoadingOverlay() {
-        val web = webView ?: return
+        val box = container ?: return
         ui.removeCallbacks(loadingTimeout)
         var v = loadingView
         if (v == null) {
-            v = LoadingView(web.context)
+            v = LoadingView(box.context)
             loadingView = v
-            web.scrollTo(0, 0)
-            web.addView(v, AbsoluteLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0))
+            box.addView(v, FrameLayout.LayoutParams(-1, -1))
         }
         v.animate().cancel()
         v.alpha = 1f
@@ -161,12 +166,12 @@ object WebViewStore {
         val v = loadingView ?: return
         ui.removeCallbacks(loadingTimeout)
         loadingView = null
-        val web = webView
+        val box = container
         if (animated) {
-            v.animate().alpha(0f).setStartDelay(150).setDuration(250).withEndAction { web?.removeView(v) }.start()
+            v.animate().alpha(0f).setStartDelay(150).setDuration(250).withEndAction { box?.removeView(v) }.start()
         } else {
             v.animate().cancel()
-            web?.removeView(v)
+            box?.removeView(v)
         }
     }
 
