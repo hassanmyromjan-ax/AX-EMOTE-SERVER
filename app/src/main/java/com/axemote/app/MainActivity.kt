@@ -193,7 +193,7 @@ class MainActivity : Activity() {
 
     private fun attachWeb() {
         if (!::webHolder.isInitialized) return
-        val web = WebViewStore.webView ?: return
+        val web = WebViewStore.container ?: return
         placeholder.visibility = if (WebViewStore.overlayShowing) View.VISIBLE else View.GONE
         if (WebViewStore.overlayShowing) return
         if (web.parent !== webHolder) {
@@ -484,8 +484,8 @@ class MainActivity : Activity() {
         pulse?.cancel()
         WebViewStore.onOverlayChanged = null
         WebViewStore.onProgress = null
-        val web = WebViewStore.webView
-        if (web != null && web.parent === webHolder) webHolder.removeView(web)
+        val host = WebViewStore.container
+        if (host != null && host.parent === webHolder) webHolder.removeView(host)
         super.onDestroy()
     }
 
