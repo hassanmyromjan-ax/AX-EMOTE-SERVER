@@ -205,21 +205,33 @@ class MainActivity : Activity() {
     private fun updateToggle() {
         if (!::toggle.isInitialized) return
         val on = OverlayPrefs.isOn(this)
+        val iconSize = dp(30)
         if (on) {
+            // ON: electric aqua button, deep-navy text, lightning-bolt icon
             toggle.text = "OVERLAY PAGE ON"
-            toggle.setTextColor(Color.parseColor("#03150B"))
+            toggle.setTextColor(Color.parseColor("#00262E"))
             toggle.background = pill(
-                Color.parseColor("#00E676"), Color.parseColor("#00B85C"),
-                18, Color.parseColor("#69F0AE")
+                Color.parseColor("#00F0D0"), Color.parseColor("#00A8C8"),
+                18, Color.parseColor("#9CFFF0")
+            )
+            toggle.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                ToggleIconDrawable(true, Color.parseColor("#00F0D0"), Color.parseColor("#00323C"), iconSize),
+                null, null, null
             )
         } else {
+            // OFF: royal violet button, cream-gold text, power icon
             toggle.text = "OVERLAY PAGE OFF"
-            toggle.setTextColor(Color.WHITE)
+            toggle.setTextColor(Color.parseColor("#FFEFC0"))
             toggle.background = pill(
-                Color.parseColor("#5A0010"), Color.parseColor("#1E0005"),
-                18, Color.argb(230, 255, 23, 68)
+                Color.parseColor("#7B3FF2"), Color.parseColor("#3A1494"),
+                18, Color.parseColor("#B79BFF")
+            )
+            toggle.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                ToggleIconDrawable(false, Color.parseColor("#FFE9A0"), Color.parseColor("#230A63"), iconSize),
+                null, null, null
             )
         }
+        toggle.compoundDrawablePadding = dp(10)
     }
 
     /** Light zoom in / zoom out of the ON-OFF button. */
