@@ -48,7 +48,9 @@ class MainActivity : Activity() {
     private var splash: FrameLayout? = null
     private lateinit var splashBar: DualProgressBar
     private lateinit var splashPct: TextView
-    private val letters = ArrayList<TextView>()
+    private val splashAnims = ArrayList<Pair<View, Long>>()
+    private var fx: SplashFxView? = null
+    private var splashCredit: View? = null
     private var shown = 0f
     private var fake = 0f
     private var splashStart = 0L
@@ -242,80 +244,140 @@ class MainActivity : Activity() {
 
     private fun buildSplash(): FrameLayout {
         val sp = FrameLayout(this).apply {
-            setBackgroundColor(bg)
+            setBackgroundColor(Color.BLACK)
             isClickable = true // blocks touches while it is visible
         }
+        val fxView = SplashFxView(this)
+        fx = fxView
+        sp.addView(fxView, FrameLayout.LayoutParams(-1, -1))
+
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
         sp.addView(col, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
 
-        val white = Color.parseColor("#F2F2F2")
-        col.addView(letterRow(listOf(Pair("AX", blood)), 78f, 0), LinearLayout.LayoutParams(-2, -2))
-        col.addView(
-            letterRow(listOf(Pair("EMOTE", white), Pair("SERVER", green)), 32f, 2),
-            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(4) }
-        )
+        val dm = resources.displayMetrics
+        val base = minOf(dm.widthPixels * 0.15f, dm.heightPixels * 0.11f)
+        val tight = -(base * 0.18f).toInt()
 
-        val barW = (resources.displayMetrics.widthPixels * 0.66f).toInt()
+        val title = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            rotation = -4f
+        }
+        title.addView(axRow(base * 1.35f), LinearLayout.LayoutParams(-2, -2))
+        title.addView(wordRow("EMOTE", base * 1.12f, 'L', 150L), LinearLayout.LayoutParams(-2, -2).apply { topMargin = tight })
+        title.addView(wordRow("SERVER", base, 'B', 400L), LinearLayout.LayoutParams(-2, -2).apply { topMargin = tight })
+        col.addView(title, LinearLayout.LayoutParams(-2, -2))
+
+        val barW = (dm.widthPixels * 0.66f).toInt()
         splashBar = DualProgressBar(this)
-        col.addView(splashBar, LinearLayout.LayoutParams(barW, dp(6)).apply { topMargin = dp(40) })
+        col.addView(splashBar, LinearLayout.LayoutParams(barW, dp(6)).apply { topMargin = dp(46) })
 
         splashPct = TextView(this).apply {
             text = "0%"
-            setTextColor(green)
+            setTextColor(Color.parseColor("#FFE24D"))
             typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
             textSize = 15f
             letterSpacing = 0.1f
         }
         col.addView(splashPct, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+
+        // small credit at the very bottom: line - text - line (same width as the text)
+        val lineColor = Color.argb(200, 255, 43, 214)
+        val credit = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            alpha = 0f
+        }
+        credit.addView(View(this).apply { setBackgroundColor(lineColor) }, LinearLayout.LayoutParams(-1, dp(1)))
+        credit.addView(
+            TextView(this).apply {
+                text = "AX ROMJAN YT"
+                setTextColor(Color.parseColor("#FFE082"))
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                textSize = 11f
+                letterSpacing = 0.3f
+            },
+            LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(5); bottomMargin = dp(5) }
+        )
+        credit.addView(View(this).apply { setBackgroundColor(lineColor) }, LinearLayout.LayoutParams(-1, dp(1)))
+        sp.addView(credit, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(40) })
+        splashCredit = credit
         return sp
     }
 
-    /** One row of big letters; every letter waits outside the screen until its animation starts. */
-    private fun letterRow(words: List<Pair<String, Int>>, sizeSp: Float, startIdx: Int): LinearLayout {
+    /** "AX" arrives from the RIGHT, with the shield and the game controller popping in beside it. */
+    private fun axRow(sizePx: Float): LinearLayout {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        val dm = resources.displayMetrics
-        var idx = startIdx
-        words.forEachIndexed { wi, (word, color) ->
-            if (wi > 0) row.addView(View(this), LinearLayout.LayoutParams(dp((sizeSp * 0.5f).toInt()), 1))
-            for (ch in word) {
-                val tv = TextView(this).apply {
-                    text = ch.toString()
-                    setTextColor(color)
-                    textSize = sizeSp
-                    typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
-                    includeFontPadding = false
-                    alpha = 0f
-                }
-                when (idx % 4) {
-                    0 -> tv.translationX = -dm.widthPixels.toFloat()
-                    1 -> tv.translationX = dm.widthPixels.toFloat()
-                    2 -> tv.translationY = -dm.heightPixels.toFloat()
-                    else -> tv.translationY = dm.heightPixels.toFloat()
-                }
-                letters.add(tv)
-                row.addView(tv)
-                idx++
-            }
+        val iw = (sizePx * 0.42f).toInt()
+        val shield = MiniIconView(this, MiniIconView.SHIELD)
+        row.addView(shield, LinearLayout.LayoutParams(iw, (iw * 1.1f).toInt()).apply { marginEnd = dp(4) })
+        prepareIcon(shield, 380L)
+        var i = 0L
+        for (ch in "AX") {
+            val v = TitleLetterView(this, ch.toString(), sizePx)
+            prepareFly(v, 'R', i * 70L)
+            row.addView(v)
+            i++
+        }
+        val pad = MiniIconView(this, MiniIconView.PAD)
+        row.addView(pad, LinearLayout.LayoutParams((iw * 1.3f).toInt(), (iw * 0.95f).toInt()).apply { marginStart = dp(4) })
+        prepareIcon(pad, 460L)
+        return row
+    }
+
+    /** EMOTE arrives from the LEFT, SERVER from the BOTTOM (letter by letter). */
+    private fun wordRow(word: String, sizePx: Float, from: Char, startDelay: Long): LinearLayout {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        var i = 0L
+        for (ch in word) {
+            val v = TitleLetterView(this, ch.toString(), sizePx)
+            prepareFly(v, from, startDelay + i * 70L)
+            row.addView(v)
+            i++
         }
         return row
     }
 
+    private fun prepareFly(v: View, from: Char, delay: Long) {
+        val dm = resources.displayMetrics
+        v.alpha = 0f
+        when (from) {
+            'L' -> v.translationX = -dm.widthPixels.toFloat()
+            'R' -> v.translationX = dm.widthPixels.toFloat()
+            'T' -> v.translationY = -dm.heightPixels.toFloat()
+            else -> v.translationY = dm.heightPixels.toFloat()
+        }
+        splashAnims.add(Pair(v, delay))
+    }
+
+    private fun prepareIcon(v: View, delay: Long) {
+        v.alpha = 0f
+        v.scaleX = 0f
+        v.scaleY = 0f
+        splashAnims.add(Pair(v, delay))
+    }
+
     private fun startSplash() {
         splashStart = System.currentTimeMillis()
-        letters.forEachIndexed { i, tv ->
-            tv.animate()
-                .translationX(0f).translationY(0f).alpha(1f)
-                .setStartDelay(i * 45L)
-                .setDuration(650)
+        fx?.start()
+        splashAnims.forEach { (v, delay) ->
+            v.animate()
+                .translationX(0f).translationY(0f).alpha(1f).scaleX(1f).scaleY(1f)
+                .setStartDelay(delay)
+                .setDuration(600)
                 .setInterpolator(OvershootInterpolator(0.9f))
                 .start()
         }
+        splashCredit?.animate()?.alpha(1f)?.setStartDelay(700)?.setDuration(500)?.start()
         ui.post(tick)
     }
 
@@ -324,7 +386,8 @@ class MainActivity : Activity() {
         override fun run() {
             val real = WebViewStore.progress
             val timedOut = System.currentTimeMillis() - splashStart > 40000
-            val done = real >= 100 || timedOut
+            val elapsed = System.currentTimeMillis() - splashStart
+            val done = (real >= 100 && elapsed >= 1500) || timedOut
             if (!done) fake += (90f - fake) * 0.012f
             val target = if (done) 100f else minOf(95f, maxOf(real.toFloat(), fake))
             val diff = target - shown
@@ -345,6 +408,7 @@ class MainActivity : Activity() {
         val sp = splash ?: return
         sp.animate().alpha(0f).setDuration(300).withEndAction {
             sp.visibility = View.GONE
+            fx?.stop()
             splash = null
         }.start()
     }
@@ -404,6 +468,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
+        fx?.stop()
         pulse?.cancel()
         WebViewStore.onOverlayChanged = null
         WebViewStore.onProgress = null
