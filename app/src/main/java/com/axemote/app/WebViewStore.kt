@@ -1,9 +1,16 @@
 package com.axemote.app
 
+import android.animation.ValueAnimator
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.RectF
+import android.graphics.Shader
+import android.graphics.Typeface
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -14,6 +21,8 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
+import android.widget.AbsoluteLayout
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -53,7 +62,6 @@ object WebViewStore {
     private val ui = Handler(Looper.getMainLooper())
     private var clearHistoryPending = false
     private var errorHtml: String? = null
-    private var loadingHtml: String? = null
 
     // Refresh button: animated "Loading..." page + 5 second internet check
     private var checking = false
@@ -97,15 +105,15 @@ object WebViewStore {
 
     /**
      * Refresh button of the error page:
-     * shows the Loading page and checks the internet for 5 seconds.
-     * - internet comes on  -> loads the website (Loading page stays until the website appears)
+     * shows the Loading cover and checks the internet for 5 seconds.
+     * - internet comes on  -> loads the website (Loading cover stays until the website is fully loaded)
      * - still offline after 5 seconds -> the same Internet Error page comes back
      */
     fun refresh() {
         if (checking) return
         checking = true
         checkStart = SystemClock.uptimeMillis()
-        showLoadingPage()
+        showLoadingOverlay()
         ui.postDelayed(checkTick, 300)
     }
 
@@ -126,11 +134,40 @@ object WebViewStore {
         }
     }
 
-    private fun showLoadingPage() {
+    private var loadingView: LoadingView? = null
+    private val loadingTimeout = Runnable { hideLoadingOverlay(true) }
+
+    /**
+     * Native "Loading..." cover drawn ON TOP of the WebView. It stays until the website
+     * has really finished loading, so the half-loaded page is never visible.
+     */
+    @Suppress("DEPRECATION")
+    private fun showLoadingOverlay() {
         val web = webView ?: return
-        showingError = true // treat like the error page (no history clearing / no back navigation)
-        web.stopLoading()
-        web.loadDataWithBaseURL(null, loadingPage(), "text/html", "UTF-8", null)
+        ui.removeCallbacks(loadingTimeout)
+        var v = loadingView
+        if (v == null) {
+            v = LoadingView(web.context)
+            loadingView = v
+            web.scrollTo(0, 0)
+            web.addView(v, AbsoluteLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, 0, 0))
+        }
+        v.animate().cancel()
+        v.alpha = 1f
+        ui.postDelayed(loadingTimeout, 60000) // safety
+    }
+
+    private fun hideLoadingOverlay(animated: Boolean) {
+        val v = loadingView ?: return
+        ui.removeCallbacks(loadingTimeout)
+        loadingView = null
+        val web = webView
+        if (animated) {
+            v.animate().alpha(0f).setStartDelay(150).setDuration(250).withEndAction { web?.removeView(v) }.start()
+        } else {
+            v.animate().cancel()
+            web?.removeView(v)
+        }
     }
 
     fun isOnline(): Boolean {
@@ -148,21 +185,9 @@ object WebViewStore {
     private fun showError() {
         val web = webView ?: return
         showingError = true
+        hideLoadingOverlay(false)
         web.stopLoading()
         web.loadDataWithBaseURL(null, errorPage(), "text/html", "UTF-8", null)
-    }
-
-    private fun loadingPage(): String {
-        loadingHtml?.let { return it }
-        val html = try {
-            app!!.resources.openRawResource(R.raw.ax_loading)
-                .bufferedReader(Charsets.UTF_8).use { it.readText() }
-        } catch (_: Exception) {
-            "<html><body style='background:#000;color:#fff;text-align:center;font-family:sans-serif'>" +
-                "<h2 style='margin-top:40vh'>Loading...</h2></body></html>"
-        }
-        loadingHtml = html
-        return html
     }
 
     private fun errorPage(): String {
@@ -283,7 +308,105 @@ object WebViewStore {
                     clearHistoryPending = false
                     view?.clearHistory()
                 }
+                // website really finished -> remove the Loading cover
+                if (!showingError && url != null && url.contains(HOST)) hideLoadingOverlay(true)
             }
         }
+    }
+}
+
+
+/** Animated "Loading..." screen (ring + wifi icon + text), drawn natively with Canvas. */
+class LoadingView(context: Context) : View(context) {
+    private val d = resources.displayMetrics.density
+    private var phase = 0f
+    private var anim: ValueAnimator? = null
+    private val bgP = Paint()
+    private val trackP = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.parseColor("#2A1648") }
+    private val ringP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = Color.parseColor("#FF2BD6")
+    }
+    private val arcP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; color = Color.parseColor("#FFE24D")
+    }
+    private val dotP = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL; color = Color.parseColor("#FFE24D") }
+    private val textP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+    }
+    private val rect = RectF()
+
+    init { isClickable = true } // swallow touches while loading
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        bgP.shader = RadialGradient(
+            w / 2f, 0f, h * 0.9f,
+            intArrayOf(Color.parseColor("#33104A"), Color.parseColor("#080716"), Color.BLACK),
+            floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP
+        )
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        anim = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 1200
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { phase = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        anim?.cancel()
+        anim = null
+        super.onDetachedFromWindow()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        canvas.drawRect(0f, 0f, w, h, bgP)
+
+        val s = (minOf(w, h) * 0.28f).coerceIn(84f * d, 130f * d)
+        val cx = w / 2f
+        val cy = h / 2f - s * 0.35f
+        val r = s * 0.45f
+
+        // spinning ring
+        trackP.strokeWidth = s * 0.05f
+        ringP.strokeWidth = s * 0.05f
+        canvas.drawCircle(cx, cy, r, trackP)
+        rect.set(cx - r, cy - r, cx + r, cy + r)
+        canvas.drawArc(rect, phase * 360f, 100f, false, ringP)
+
+        // wifi icon: arcs light up one after another
+        arcP.strokeWidth = s * 0.055f
+        val ay = cy + s * 0.20f
+        val lit = (phase * 4f).toInt() % 4
+        for (k in 0..2) {
+            val rr = s * (0.10f + 0.11f * k)
+            rect.set(cx - rr, ay - rr, cx + rr, ay + rr)
+            arcP.alpha = if (k < lit) 255 else 70
+            canvas.drawArc(rect, 225f, 90f, false, arcP)
+        }
+        canvas.drawCircle(cx, ay, s * 0.035f, dotP)
+
+        // "Loading..." text under the icon
+        textP.textSize = s * 0.24f
+        val word = "Loading"
+        val wordW = textP.measureText(word)
+        val dotW = textP.measureText(".")
+        val x0 = cx - (wordW + dotW * 3f) / 2f
+        val y = cy + r + s * 0.42f
+        textP.alpha = 255
+        canvas.drawText(word, x0, y, textP)
+        val twoPi = (2.0 * Math.PI)
+        for (i in 0..2) {
+            val a = 0.5 + 0.5 * Math.sin(twoPi * (phase - i * 0.2))
+            textP.alpha = (60 + 195 * a).toInt().coerceIn(0, 255)
+            canvas.drawText(".", x0 + wordW + dotW * i, y, textP)
+        }
+        textP.alpha = 255
     }
 }
