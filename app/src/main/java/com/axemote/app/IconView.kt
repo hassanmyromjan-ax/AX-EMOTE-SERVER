@@ -3,9 +3,11 @@ package com.axemote.app
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Shader
 import android.view.View
 
 /** Small crisp vector-style icons drawn with Canvas (no font / emoji dependency). */
@@ -100,10 +102,17 @@ class DualProgressBar(context: Context) : View(context) {
     var value: Float = 0f
         set(v) { field = v; invalidate() }
 
-    private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(34, 36, 38) }
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(0, 230, 118) }
+    private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1A1033") }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val clip = Path()
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        fillPaint.shader = LinearGradient(
+            0f, 0f, w.toFloat(), 0f,
+            Color.parseColor("#FF2BD6"), Color.parseColor("#FFE24D"), Shader.TileMode.CLAMP
+        )
+    }
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat()
