@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".AxApp"
+        android:hardwareAccelerated="true"
         android:allowBackup="false"
         android:label="AX EMOTE SERVER"
         android:icon="@mipmap/ic_launcher"
@@ -18,7 +20,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:exported="true">
 
             <intent-filter>
