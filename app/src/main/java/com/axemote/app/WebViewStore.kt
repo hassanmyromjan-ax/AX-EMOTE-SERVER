@@ -11,6 +11,7 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -52,6 +53,11 @@ object WebViewStore {
     private val ui = Handler(Looper.getMainLooper())
     private var clearHistoryPending = false
     private var errorHtml: String? = null
+    private var loadingHtml: String? = null
+
+    // Refresh button: animated "Loading..." page + 5 second internet check
+    private var checking = false
+    private var checkStart = 0L
 
     fun detach(view: View) {
         (view.parent as? ViewGroup)?.removeView(view)
@@ -89,13 +95,42 @@ object WebViewStore {
         }
     }
 
-    /** Refresh button of the error page. */
+    /**
+     * Refresh button of the error page:
+     * shows the Loading page and checks the internet for 5 seconds.
+     * - internet comes on  -> loads the website (Loading page stays until the website appears)
+     * - still offline after 5 seconds -> the same Internet Error page comes back
+     */
     fun refresh() {
-        if (!isOnline()) {
-            showError() // still offline -> same error stays
-        } else {
-            loadSite()
+        if (checking) return
+        checking = true
+        checkStart = SystemClock.uptimeMillis()
+        showLoadingPage()
+        ui.postDelayed(checkTick, 300)
+    }
+
+    private val checkTick = object : Runnable {
+        override fun run() {
+            val elapsed = SystemClock.uptimeMillis() - checkStart
+            if (isOnline() && elapsed >= 700) { // keep the Loading page visible for a moment
+                checking = false
+                loadSite()
+                return
+            }
+            if (elapsed >= 5000) {
+                checking = false
+                showError()
+                return
+            }
+            ui.postDelayed(this, 300)
         }
+    }
+
+    private fun showLoadingPage() {
+        val web = webView ?: return
+        showingError = true // treat like the error page (no history clearing / no back navigation)
+        web.stopLoading()
+        web.loadDataWithBaseURL(null, loadingPage(), "text/html", "UTF-8", null)
     }
 
     fun isOnline(): Boolean {
@@ -115,6 +150,19 @@ object WebViewStore {
         showingError = true
         web.stopLoading()
         web.loadDataWithBaseURL(null, errorPage(), "text/html", "UTF-8", null)
+    }
+
+    private fun loadingPage(): String {
+        loadingHtml?.let { return it }
+        val html = try {
+            app!!.resources.openRawResource(R.raw.ax_loading)
+                .bufferedReader(Charsets.UTF_8).use { it.readText() }
+        } catch (_: Exception) {
+            "<html><body style='background:#000;color:#fff;text-align:center;font-family:sans-serif'>" +
+                "<h2 style='margin-top:40vh'>Loading...</h2></body></html>"
+        }
+        loadingHtml = html
+        return html
     }
 
     private fun errorPage(): String {
@@ -142,7 +190,7 @@ object WebViewStore {
                 override fun onLost(network: Network) {
                     // small delay so Wi-Fi <-> mobile data switching does not trigger a false error
                     ui.postDelayed({
-                        if (!showingError && !isOnline()) showError()
+                        if (!showingError && !checking && !isOnline()) showError()
                     }, 1200)
                 }
             })
