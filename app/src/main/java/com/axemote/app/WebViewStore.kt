@@ -44,6 +44,10 @@ object WebViewStore {
     /** Set by MainActivity: page load progress 0..100. */
     var onProgress: ((Int) -> Unit)? = null
 
+    /** Always-updated load progress (0..100) - used by the startup title screen. */
+    @Volatile
+    var progress: Int = 0
+
     private var app: Application? = null
     private val ui = Handler(Looper.getMainLooper())
     private var clearHistoryPending = false
@@ -76,6 +80,7 @@ object WebViewStore {
         }
         showingError = false
         clearHistoryPending = true
+        progress = 0
         val ctx = app
         if (ctx != null) {
             web.loadUrl(WEBSITE, mapOf("X-AX-Client-Id" to clientId(ctx)))
@@ -197,6 +202,7 @@ object WebViewStore {
 
         web.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progress = newProgress
                 onProgress?.invoke(newProgress)
             }
         }
