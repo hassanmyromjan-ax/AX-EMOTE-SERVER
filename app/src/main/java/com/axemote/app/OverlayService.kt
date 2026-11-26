@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -44,12 +45,19 @@ class OverlayService : Service() {
 
     private val barColor = Color.rgb(8, 11, 43)
 
+    // "drag icon to the bottom to remove it" target (portrait only)
+    private var targetWin: FrameLayout? = null
+    private var targetIcon: IconView? = null
+    private var targetShown = false
+    private var targetActive = false
+
     override fun onCreate() {
         super.onCreate()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         val s = screenSize()
         lastSW = s[0]; lastSH = s[1]
         createChannel()
+        createRemoveTarget() // added BEFORE the icon so the icon is always drawn above it
         if (Build.VERSION.SDK_INT >= 34) {
             startForeground(7001, notification(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
@@ -169,12 +177,13 @@ class OverlayService : Service() {
         }
         image.setOnTouchListener(object : View.OnTouchListener {
             var downX = 0f; var downY = 0f; var startX = 0; var startY = 0; var moved = false
-            var sw = 0; var sh = 0
+            var sw = 0; var sh = 0; var portrait = false
             override fun onTouch(v: View, event: MotionEvent): Boolean {
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
                         downX = event.rawX; downY = event.rawY; startX = params.x; startY = params.y; moved = false
                         val sc = screenSize(); sw = sc[0]; sh = sc[1]
+                        portrait = sh > sw
                         return true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -183,19 +192,87 @@ class OverlayService : Service() {
                         params.x = (startX + dx).coerceIn(0, maxOf(0, sw - size))
                         params.y = (startY + dy).coerceIn(0, maxOf(0, sh - size))
                         try { wm.updateViewLayout(image, params) } catch (_: Exception) { }
+                        if (moved && portrait) {
+                            showRemoveTarget()
+                            setTargetActive(isOverTarget(params.x + size / 2, params.y + size / 2, sw, sh))
+                        }
                         return true
                     }
                     MotionEvent.ACTION_UP -> {
                         lastIconX = params.x; lastIconY = params.y
+                        val hit = moved && portrait && targetShown &&
+                            isOverTarget(params.x + size / 2, params.y + size / 2, sw, sh)
+                        hideRemoveTarget()
+                        if (hit) { removeIconAndStop(); return true }
                         if (!moved) showOverlayPage()
                         return true
                     }
+                    MotionEvent.ACTION_CANCEL -> { hideRemoveTarget(); return true }
                 }
                 return false
             }
         })
         icon = image; iconParams = params
         try { wm.addView(image, params) } catch (_: Exception) { icon = null; stopSelf() }
+    }
+
+    // ------------------------------------------------------------ remove target
+
+    private fun createRemoveTarget() {
+        if (targetWin != null) return
+        val holder = FrameLayout(this)
+        val t = IconView(this, IconView.TARGET)
+        holder.addView(t, FrameLayout.LayoutParams(dp(64), dp(64), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(40) })
+        t.translationY = dp(170).toFloat() // hidden below the screen edge
+        val p = WindowManager.LayoutParams(
+            dp(160), dp(150), overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL }
+        try {
+            wm.addView(holder, p)
+            targetWin = holder; targetIcon = t
+        } catch (_: Exception) { }
+    }
+
+    private fun showRemoveTarget() {
+        val t = targetIcon ?: return
+        if (targetShown) return
+        targetShown = true
+        t.animate().cancel()
+        t.animate().translationY(0f).setDuration(240).setInterpolator(DecelerateInterpolator()).start()
+    }
+
+    private fun hideRemoveTarget() {
+        val t = targetIcon ?: return
+        setTargetActive(false)
+        if (!targetShown) return
+        targetShown = false
+        t.animate().cancel()
+        t.animate().translationY(dp(170).toFloat()).setDuration(200).start()
+    }
+
+    private fun setTargetActive(a: Boolean) {
+        val t = targetIcon ?: return
+        if (a == targetActive) return
+        targetActive = a
+        t.active = a
+        val sc = if (a) 1.25f else 1f
+        t.animate().scaleX(sc).scaleY(sc).setDuration(120).start()
+    }
+
+    private fun isOverTarget(cx: Int, cy: Int, sw: Int, sh: Int): Boolean {
+        val dx = (cx - sw / 2f)
+        val dy = (cy - (sh - dp(72)).toFloat())
+        return kotlin.math.sqrt(dx * dx + dy * dy) < dp(70)
+    }
+
+    /** Icon dropped on the close target: remove the floating icon (= overlay OFF). */
+    private fun removeIconAndStop() {
+        removeIcon()
+        OverlayPrefs.setOn(this, false)
+        stopSelf()
     }
 
     // ------------------------------------------------------------ overlay page (windowed card)
@@ -374,9 +451,11 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        OverlayPrefs.setOn(this, false)
         closeOverlayPageIfNeeded()
         removeIcon()
-        OverlayPrefs.setOn(this, false)
+        targetWin?.let { try { wm.removeView(it) } catch (_: Exception) { } }
+        targetWin = null; targetIcon = null
         stopForeground(true)
         super.onDestroy()
     }
