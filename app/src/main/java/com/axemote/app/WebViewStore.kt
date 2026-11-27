@@ -37,8 +37,8 @@ import java.util.UUID
  * so cookies / localStorage / session are private to this install (multi-user safe).
  */
 object WebViewStore {
-    const val WEBSITE = "https://ax-emote-ultra.onrender.com/"
-    private const val HOST = "ax-emote-ultra.onrender.com"
+    const val WEBSITE = "https://ax-emote-bot-ultra.onrender.com/"
+    private const val HOST = "ax-emote-bot-ultra.onrender.com"
     private const val REFRESH_SCHEME = "axrefresh"
 
     var webView: WebView? = null
